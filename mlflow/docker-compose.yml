@@ -1,0 +1,144 @@
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION:?POSTGRES_VERSION is required}-alpine
+    container_name: mlflow_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - mlflow_db_data:/var/lib/postgresql/data
+    networks:
+      - mlflow-internal
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  minio:
+    image: minio/minio:${MINIO_VERSION:-latest}
+    container_name: mlflow_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - mlflow_minio_data:/data
+    networks:
+      - mlflow-internal
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    ports:
+      - "9001:9001"
+
+  create-bucket:
+    image: minio/mc:${MINIO_MC_VERSION:-latest}
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - mlflow-internal
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb --ignore-existing local/$${MLFLOW_S3_BUCKET};
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MLFLOW_S3_BUCKET: ${MLFLOW_S3_BUCKET:-mlflow}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+
+  mlflow:
+    build:
+      context: .
+      args:
+        MLFLOW_VERSION: ${MLFLOW_VERSION:?MLFLOW_VERSION is required}
+    container_name: mlflow_server
+    restart: unless-stopped
+    # port accessed only via portal proxy (no external exposure)
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    #แม่งโครตงง โครตจะไม่ best pratice โครตจะไม่ secure แต่ไม่ใส่แม่งหา bucket ไม่เจอ งง
+      MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: "*"
+      MLFLOW_SERVER_ALLOWED_HOSTS: "*"
+      MLFLOW_AUTH_CONFIG_PATH: /app/basic_auth.ini
+      MLFLOW_FLASK_SERVER_SECRET_KEY: ${MLFLOW_FLASK_SERVER_SECRET_KEY}
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${DB_USER}:Connected%25402022@db:${DB_PORT:-5432}/${DB_NAME}
+      --artifacts-destination s3://${MLFLOW_S3_BUCKET:-mlflow}/
+      --serve-artifacts
+      --host 0.0.0.0
+      --app-name basic-auth
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mlflow-internal
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  portal:
+    build: ./portal
+    container_name: mlflow_portal
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    environment:
+      MLFLOW_URL: http://mlflow:5000
+      JWT_SECRET: ${MLFLOW_FLASK_SERVER_SECRET_KEY}
+      FRONTEND_DIR: /app/frontend/dist
+      AUTH_DB_URI: postgres://${DB_USER}:Connected%25402022@db:${DB_PORT:-5432}/${DB_NAME}?sslmode=disable
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    networks:
+      - mlflow-internal
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+networks:
+  mlflow-internal:
+    driver: bridge
+
+volumes:
+  mlflow_db_data:
+    name: mlflow_db_data
+  mlflow_minio_data:
+    name: mlflow_minio_data
