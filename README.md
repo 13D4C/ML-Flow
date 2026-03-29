@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <b>Custom authentication gateway & admin panel for MLflow</b><br/>
+  <b>Custom authentication & admin panel for MLflow</b><br/>
   <sub>Go + Svelte 5 + Docker Compose — no external MLflow port, full permission control</sub>
 </p>
 
