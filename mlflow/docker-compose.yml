@@ -121,16 +121,16 @@ services:
       - "5173:8080"
     environment:
       MLFLOW_URL: http://mlflow:5000
-      JWT_SECRET: ${MLFLOW_FLASK_SERVER_SECRET_KEY}
+      JWT_SECRET: ${JWT_SECRET}
       FRONTEND_DIR: /app/frontend/dist
-      AUTH_DB_URI: postgres://${DB_USER}:Connected%25402022@db:${DB_PORT:-5432}/${DB_NAME}?sslmode=disable
-      OIDC_ISSUER_URL: https://directory.connectedtech.co.th/o
-      OIDC_CLIENT_ID: RQVvP8kB9PiGhrpcnWKBJND3dxUSEJSM
-      OIDC_CLIENT_SECRET: DARZccEGNJnsKpaiLqtyuPEvzqmF43t9
-      OIDC_REDIRECT_URL: http://localhost:5173/entry/callback
+      AUTH_DB_URI: postgres://${DB_USER}:${DB_PASSWORD_ENCODED}@db:${DB_PORT:-5432}/${DB_NAME}?sslmode=disable
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL}
       MLFLOW_AUTH_ADMIN_USERNAME: ${MLFLOW_AUTH_ADMIN_USERNAME}
       MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_AUTH_ADMIN_PASSWORD}
-      OIDC_ADMIN_USER: d4cd4c
+      OIDC_ADMIN_USER: ${OIDC_ADMIN_USER}
     depends_on:
       mlflow:
         condition: service_healthy

@@ -20,30 +20,8 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// ──────────────────────────────────────────────
-// Config
-// ──────────────────────────────────────────────
-
-var (
-	mlflowURL  string
-	jwtSecret  []byte
-	listenAddr = ":8080"
-	cookieName = "mlflow_session"
-	authDBURI  string
-)
-
-func init() {
-	mlflowURL = getEnv("MLFLOW_URL", "http://mlflow:5000")
-	jwtSecret = []byte(getEnv("JWT_SECRET", "change-me-in-production"))
-	authDBURI = getEnv("AUTH_DB_URI", "postgres://mlflow:Connected%402022@db:5432/mlflow?sslmode=disable")
-}
-
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
+// Config is loaded from environment variables via config.go.
+// See .env.example for the full list of available variables.
 
 // ──────────────────────────────────────────────
 // JWT helpers
@@ -869,6 +847,8 @@ func authProxyMiddleware(proxy *httputil.ReverseProxy) http.Handler {
 // ──────────────────────────────────────────────
 
 func main() {
+	loadConfig()
+
 	proxy := newMLflowProxy()
 
 	mux := http.NewServeMux()
@@ -880,15 +860,11 @@ func main() {
 	mux.HandleFunc("/api/me/credentials", handleMeCredentials)
 
 	// ── OIDC ──
-	oidcIssuerURL := getEnv("OIDC_ISSUER_URL", "https://directory.connectedtech.co.th/o")
-	oidcClientID := getEnv("OIDC_CLIENT_ID", "")
-	oidcClientSecret := getEnv("OIDC_CLIENT_SECRET", "")
-	oidcRedirectURL := getEnv("OIDC_REDIRECT_URL", "http://localhost/api/oidc/callback")
-	mlflowAdminUser := getEnv("MLFLOW_AUTH_ADMIN_USERNAME", "admin")
-	mlflowAdminPass := getEnv("MLFLOW_AUTH_ADMIN_PASSWORD", "Connected@2022")
-	oidcAdminUser := getEnv("OIDC_ADMIN_USER", "")
-
-	if oidcHandler, err := NewOIDCHandler(oidcIssuerURL, oidcClientID, oidcClientSecret, oidcRedirectURL, authDBURI, mlflowAdminUser, mlflowAdminPass, oidcAdminUser); err == nil {
+	if oidcHandler, err := NewOIDCHandler(
+		cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.OIDCClientSecret,
+		cfg.OIDCRedirectURL, cfg.AuthDBURI,
+		cfg.MLflowAdminUser, cfg.MLflowAdminPass, cfg.OIDCAdminUser,
+	); err == nil {
 		mux.HandleFunc("/api/oidc/login", oidcHandler.HandleLoginRedirect)
 		mux.HandleFunc("/api/oidc/callback", oidcHandler.HandleLoginCallback)
 		mux.HandleFunc("/api/oidc/exchange", oidcHandler.HandleExchange)
@@ -928,7 +904,7 @@ func main() {
 	mux.Handle("/mlflow/", authProxyMiddleware(proxy))
 
 	// ── Static frontend ──
-	frontendDir := getEnv("FRONTEND_DIR", "./frontend/dist")
+	frontendDir := cfg.FrontendDir
 	fileServer := http.FileServer(http.Dir(frontendDir))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
