@@ -932,11 +932,13 @@ func main() {
 	fileServer := http.FileServer(http.Dir(frontendDir))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Authenticated user on root → redirect to MLflow
+		// Authenticated user on root → redirect to MLflow (if not admin)
 		if r.URL.Path == "/" {
-			if _, err := getClaimsFromRequest(r); err == nil {
-				http.Redirect(w, r, "/mlflow/", http.StatusTemporaryRedirect)
-				return
+			if claims, err := getClaimsFromRequest(r); err == nil {
+				if !claims.IsAdmin {
+					http.Redirect(w, r, "/mlflow/", http.StatusTemporaryRedirect)
+					return
+				}
 			}
 		}
 
