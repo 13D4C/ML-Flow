@@ -827,7 +827,7 @@ func newMLflowProxy() *httputil.ReverseProxy {
 </div>
 <script>
 function portalLoadCreds(){fetch('/api/me/credentials').then(r=>r.json()).then(d=>{document.getElementById('pc-user').textContent=d.username||'—';document.getElementById('pc-pass').textContent=d.password||'—';}).catch(()=>{document.getElementById('pc-user').textContent='Error';document.getElementById('pc-pass').textContent='Error';});}
-(function(){try{var c=document.cookie.match(/mlflow_session=([^;]+)/);if(c){var p=JSON.parse(atob(c[1].split('.')[1]));if(p.is_admin){document.getElementById('portal-admin-btn').style.display='flex';}}}catch(e){}})();
+fetch('/api/me').then(r=>r.json()).then(d=>{if(d.is_admin){document.getElementById('portal-admin-btn').style.display='flex';}}).catch(()=>{});
 </script>`
 			html = strings.Replace(html, "</body>", portalBar+"</body>", 1)
 
@@ -886,8 +886,9 @@ func main() {
 	oidcRedirectURL := getEnv("OIDC_REDIRECT_URL", "http://localhost/api/oidc/callback")
 	mlflowAdminUser := getEnv("MLFLOW_AUTH_ADMIN_USERNAME", "admin")
 	mlflowAdminPass := getEnv("MLFLOW_AUTH_ADMIN_PASSWORD", "Connected@2022")
+	oidcAdminUser := getEnv("OIDC_ADMIN_USER", "")
 
-	if oidcHandler, err := NewOIDCHandler(oidcIssuerURL, oidcClientID, oidcClientSecret, oidcRedirectURL, authDBURI, mlflowAdminUser, mlflowAdminPass); err == nil {
+	if oidcHandler, err := NewOIDCHandler(oidcIssuerURL, oidcClientID, oidcClientSecret, oidcRedirectURL, authDBURI, mlflowAdminUser, mlflowAdminPass, oidcAdminUser); err == nil {
 		mux.HandleFunc("/api/oidc/login", oidcHandler.HandleLoginRedirect)
 		mux.HandleFunc("/api/oidc/callback", oidcHandler.HandleLoginCallback)
 		mux.HandleFunc("/api/oidc/exchange", oidcHandler.HandleExchange)

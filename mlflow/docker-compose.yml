@@ -130,6 +130,7 @@ services:
       OIDC_REDIRECT_URL: http://localhost:5173/entry/callback
       MLFLOW_AUTH_ADMIN_USERNAME: ${MLFLOW_AUTH_ADMIN_USERNAME}
       MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_AUTH_ADMIN_PASSWORD}
+      OIDC_ADMIN_USER: d4cd4c
     depends_on:
       mlflow:
         condition: service_healthy

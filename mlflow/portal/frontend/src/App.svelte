@@ -94,7 +94,13 @@
     }
   }
 
-  function goToLogin() { page = 'login'; }
+  function goToLogin() {
+    if (oidcEnabled) {
+      window.location.href = '/api/oidc/login';
+    } else {
+      page = 'login';
+    }
+  }
   function goToLanding() { page = 'landing'; }
 
   // ─── Toast ───

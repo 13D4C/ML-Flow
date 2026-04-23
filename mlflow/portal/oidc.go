@@ -22,12 +22,13 @@ type OIDCHandler struct {
 	AuthDBURI       string
 	MLflowAdminUser string
 	MLflowAdminPass string
+	AdminUsername   string
 
 	Provider   *oidc.Provider
 	OAuth2Conf *oauth2.Config
 }
 
-func NewOIDCHandler(issuerURL, clientID, clientSecret, redirectURL, authDBURI, adminUser, adminPass string) (*OIDCHandler, error) {
+func NewOIDCHandler(issuerURL, clientID, clientSecret, redirectURL, authDBURI, adminUser, adminPass, oidcAdminUser string) (*OIDCHandler, error) {
 	if issuerURL == "" || clientID == "" || clientSecret == "" {
 		return nil, fmt.Errorf("missing OIDC credentials")
 	}
@@ -53,6 +54,7 @@ func NewOIDCHandler(issuerURL, clientID, clientSecret, redirectURL, authDBURI, a
 		AuthDBURI:       authDBURI,
 		MLflowAdminUser: adminUser,
 		MLflowAdminPass: adminPass,
+		AdminUsername:   oidcAdminUser,
 		Provider:        provider,
 		OAuth2Conf:      oauth2Conf,
 	}
@@ -130,6 +132,14 @@ func (h *OIDCHandler) getOrCreateOIDCUser(oidcSub, preferredUsername string) (st
 		oidcSub, mlflowUsername, password)
 	if err != nil {
 		return "", "", fmt.Errorf("store oidc mapping: %w", err)
+	}
+
+	// Auto-grant admin to designated admin user
+	if h.AdminUsername != "" && mlflowUsername == h.AdminUsername {
+		_, _, _ = mlflowRequest("PATCH", "/api/2.0/mlflow/users/update-admin",
+			map[string]interface{}{"username": mlflowUsername, "is_admin": true},
+			h.MLflowAdminUser, h.MLflowAdminPass)
+		log.Printf("Granted admin to OIDC user: %s", mlflowUsername)
 	}
 
 	return mlflowUsername, password, nil
