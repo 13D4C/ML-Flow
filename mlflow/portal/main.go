@@ -879,6 +879,28 @@ func main() {
 	mux.HandleFunc("/api/me", handleMe)
 	mux.HandleFunc("/api/me/credentials", handleMeCredentials)
 
+	// ── OIDC ──
+	oidcIssuerURL := getEnv("OIDC_ISSUER_URL", "https://directory.connectedtech.co.th/o")
+	oidcClientID := getEnv("OIDC_CLIENT_ID", "")
+	oidcClientSecret := getEnv("OIDC_CLIENT_SECRET", "")
+	oidcRedirectURL := getEnv("OIDC_REDIRECT_URL", "http://localhost/api/oidc/callback")
+	mlflowAdminUser := getEnv("MLFLOW_AUTH_ADMIN_USERNAME", "admin")
+	mlflowAdminPass := getEnv("MLFLOW_AUTH_ADMIN_PASSWORD", "Connected@2022")
+
+	if oidcHandler, err := NewOIDCHandler(oidcIssuerURL, oidcClientID, oidcClientSecret, oidcRedirectURL, authDBURI, mlflowAdminUser, mlflowAdminPass); err == nil {
+		mux.HandleFunc("/api/oidc/login", oidcHandler.HandleLoginRedirect)
+		mux.HandleFunc("/api/oidc/callback", oidcHandler.HandleLoginCallback)
+		mux.HandleFunc("/api/oidc/exchange", oidcHandler.HandleExchange)
+		mux.HandleFunc("/api/oidc/enabled", oidcHandler.HandleEnabled)
+		log.Println("✓ OIDC Single Sign-On Enabled")
+	} else {
+		mux.HandleFunc("/api/oidc/enabled", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]bool{"enabled": false})
+		})
+		log.Printf("⚠ OIDC Single Sign-On Disabled: %v", err)
+	}
+
 	// ── Admin: User Management ──
 	mux.HandleFunc("/api/admin/users/get", handleAdminGetUser)
 	mux.HandleFunc("/api/admin/users/create", handleAdminCreateUser)

@@ -118,11 +118,18 @@ services:
     restart: unless-stopped
     ports:
       - "80:8080"
+      - "5173:8080"
     environment:
       MLFLOW_URL: http://mlflow:5000
       JWT_SECRET: ${MLFLOW_FLASK_SERVER_SECRET_KEY}
       FRONTEND_DIR: /app/frontend/dist
       AUTH_DB_URI: postgres://${DB_USER}:Connected%25402022@db:${DB_PORT:-5432}/${DB_NAME}?sslmode=disable
+      OIDC_ISSUER_URL: https://directory.connectedtech.co.th/o
+      OIDC_CLIENT_ID: RQVvP8kB9PiGhrpcnWKBJND3dxUSEJSM
+      OIDC_CLIENT_SECRET: DARZccEGNJnsKpaiLqtyuPEvzqmF43t9
+      OIDC_REDIRECT_URL: http://localhost:5173/entry/callback
+      MLFLOW_AUTH_ADMIN_USERNAME: ${MLFLOW_AUTH_ADMIN_USERNAME}
+      MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_AUTH_ADMIN_PASSWORD}
     depends_on:
       mlflow:
         condition: service_healthy

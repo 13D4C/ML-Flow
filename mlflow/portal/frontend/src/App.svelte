@@ -1,6 +1,6 @@
 <script>
   // ─── State ───
-  let page = $state('loading'); // 'loading' | 'landing' | 'login' | 'admin'
+  let page = $state('loading'); // 'loading' | 'landing' | 'login' | 'admin' | 'oidcCallback'
   let user = $state(null);
 
   // Login state
@@ -9,6 +9,8 @@
   let loginError = $state('');
   let loginLoading = $state(false);
   let showPassword = $state(false);
+  let oidcEnabled = $state(false);
+  let oidcCallbackError = $state('');
 
   // Admin state
   let activeTab = $state('users');
@@ -26,8 +28,42 @@
 
   // ─── Init ───
   $effect(() => {
+    // Handle OIDC callback route (e.g. /entry/callback?code=...&state=...)
+    if (window.location.pathname === '/entry/callback') {
+      page = 'oidcCallback';
+      handleOIDCCallback();
+      return;
+    }
     checkAuth();
   });
+
+  async function handleOIDCCallback() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const error = params.get('error');
+
+    if (error) {
+      oidcCallbackError = params.get('error_description') || error;
+      return;
+    }
+    if (!code || !state) {
+      oidcCallbackError = 'Missing code or state in callback URL';
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/oidc/exchange?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        window.location.href = data.is_admin ? '/' : '/mlflow/';
+      } else {
+        oidcCallbackError = data.error || 'Authentication failed';
+      }
+    } catch {
+      oidcCallbackError = 'Cannot connect to server';
+    }
+  }
 
   async function checkAuth() {
     try {
@@ -45,6 +81,16 @@
       }
     } catch {
       page = 'landing';
+    }
+
+    try {
+      const oidcRes = await fetch('/api/oidc/enabled');
+      if (oidcRes.ok) {
+        const data = await oidcRes.json();
+        oidcEnabled = data.enabled === true;
+      }
+    } catch (e) {
+      console.log('OIDC check failed:', e);
     }
   }
 
@@ -466,6 +512,27 @@
   </div>
 
 <!-- ============================================= -->
+<!-- OIDC CALLBACK                                -->
+<!-- ============================================= -->
+{:else if page === 'oidcCallback'}
+  <div class="flex items-center justify-center min-h-screen bg-brand-bg px-4">
+    <div class="text-center">
+      {#if oidcCallbackError}
+        <div class="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <p class="text-white font-semibold mb-1">Authentication Failed</p>
+        <p class="text-brand-muted text-sm mb-5">{oidcCallbackError}</p>
+        <a href="/" class="px-5 py-2 rounded-md text-sm font-semibold bg-accent text-brand-bg hover:brightness-110 transition-all">Back to Home</a>
+      {:else}
+        <div class="w-10 h-10 rounded-full border-2 border-accent/20 border-t-accent animate-spin mx-auto mb-4"></div>
+        <p class="text-white font-semibold mb-1">Signing you in…</p>
+        <p class="text-brand-muted text-sm">Please wait while we complete authentication</p>
+      {/if}
+    </div>
+  </div>
+
+<!-- ============================================= -->
 <!-- LANDING PAGE                                  -->
 <!-- ============================================= -->
 {:else if page === 'landing'}
@@ -631,7 +698,22 @@
         </button>
       </form>
 
+      <!-- Divider -->
+      {#if oidcEnabled}
+      <div class="flex items-center gap-3 my-6">
+        <div class="h-px bg-white/5 flex-1"></div>
+        <span class="text-[11px] text-brand-subtle uppercase tracking-wider font-medium">Or</span>
+        <div class="h-px bg-white/5 flex-1"></div>
+      </div>
+
+      <!-- OIDC Login Button -->
+      <a href="/api/oidc/login" class="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-md text-[14px] font-medium flex items-center justify-center gap-2 transition-all border border-white/10 hover:border-white/20 h-10 mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-80"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Sign in with ConnectedTech
+      </a>
+      {:else}
       <div class="h-px bg-white/5 my-6"></div>
+      {/if}
 
       <button class="w-full flex items-center justify-center gap-1.5 py-2 px-2 border border-white/5 rounded-md text-brand-subtle text-[13px] hover:text-brand-muted hover:border-white/10 transition-all" onclick={goToLanding}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
